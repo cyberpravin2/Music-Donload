@@ -3,16 +3,11 @@ import logging
 import asyncio
 import yt_dlp
 from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-)
-from collections import defaultdict
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ================= CONFIG =================
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Render ENV
-ADMIN_IDS = {8541949664}  # <-- apna Telegram numeric ID yahan daalo
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Render ENV variable
+ADMIN_IDS = {8541949664}  # apna Telegram numeric ID
 
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -28,7 +23,7 @@ logger = logging.getLogger(__name__)
 users = set()
 total_downloads = 0
 
-# ================= YT-DLP =================
+# ================= YT-DLP OPTIONS =================
 ydl_opts = {
     "format": "bestaudio/best",
     "outtmpl": f"{DOWNLOAD_DIR}/%(id)s.%(ext)s",
@@ -39,6 +34,7 @@ ydl_opts = {
 # ================= HELPERS =================
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
+
 
 def search_and_download(song: str):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -53,51 +49,53 @@ def search_and_download(song: str):
         raise Exception("Audio file not found")
 
 # ================= COMMANDS =================
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users.add(update.effective_user.id)
     await update.message.reply_text(
-        "🎵 *Music Downloader Bot*\n\n"
+        "🎵 Music Downloader Bot\n\n"
         "Commands:\n"
         "/music <song name> – Download music\n"
         "/help – Help\n\n"
         "Example:\n"
-        "`/music Kesariya`",
-        parse_mode="Markdown",
+        "/music Kesariya"
     )
+
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "📌 *Available Commands*\n\n"
+        "📌 Commands\n\n"
         "/music <song> – Download audio\n\n"
-        "👑 *Admin Commands*\n"
-        "/broadcast <msg>\n"
+        "👑 Admin Commands\n"
+        "/broadcast <message>\n"
         "/status\n"
-        "/users",
-        parse_mode="Markdown",
+        "/users"
     )
+
 
 async def music(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global total_downloads
     users.add(update.effective_user.id)
 
     if not context.args:
-        return await update.message.reply_text("❌ Song name likho.\nExample: `/music Senorita`", parse_mode="Markdown")
+        return await update.message.reply_text(
+            "❌ Song name likho.\nExample: /music Senorita"
+        )
 
     song = " ".join(context.args)
-    msg = await update.message.reply_text(f"🔍 Searching: *{song}*", parse_mode="Markdown")
+    msg = await update.message.reply_text(f"🔍 Searching: {song}")
 
     try:
         file_path, title, duration = await asyncio.get_event_loop().run_in_executor(
             None, search_and_download, song
         )
 
-        await update.message.reply_audio(
-            audio=open(file_path, "rb"),
-            title=title,
-            duration=int(duration) if duration else None,
-            caption=f"🎵 {title}",
-        )
+        with open(file_path, "rb") as audio:
+            await update.message.reply_audio(
+                audio=audio,
+                title=title,
+                duration=int(duration) if duration else None,
+                caption=f"🎵 {title}",
+            )
 
         total_downloads += 1
         os.remove(file_path)
@@ -108,7 +106,6 @@ async def music(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text("❌ Download failed. Dusra song try karo.")
 
 # ================= ADMIN COMMANDS =================
-
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
@@ -121,23 +118,24 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for uid in users:
         try:
-            await context.bot.send_message(uid, f"📢 *Broadcast:*\n{text}", parse_mode="Markdown")
+            await context.bot.send_message(uid, f"📢 Broadcast:\n{text}")
             sent += 1
         except:
             pass
 
     await update.message.reply_text(f"✅ Broadcast sent to {sent} users")
 
+
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
 
     await update.message.reply_text(
-        f"📊 *Bot Status*\n\n"
+        f"📊 Bot Status\n\n"
         f"👥 Users: {len(users)}\n"
-        f"⬇️ Downloads: {total_downloads}",
-        parse_mode="Markdown",
+        f"⬇️ Downloads: {total_downloads}"
     )
+
 
 async def user_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -146,7 +144,6 @@ async def user_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"👥 Total users: {len(users)}")
 
 # ================= MAIN =================
-
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -154,13 +151,13 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("music", music))
 
-    # admin
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("users", user_count))
 
     logger.info("Bot started")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
